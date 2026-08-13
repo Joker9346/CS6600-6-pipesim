@@ -4,4 +4,4 @@ CS6600 Assignment Submissions
 #### Group Members:
 - C V Tirumala Rao (EE25M067)
 - K V Veerendra Babu (EE25M102)
-- Anajaneya J S (EE25M011)
+- Anjaneya J S (EE25M011)
