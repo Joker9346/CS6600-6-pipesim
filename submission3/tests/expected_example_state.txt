@@ -1,0 +1,12 @@
+BEGIN STATE
+x0 0
+x1 5
+x2 7
+x3 12
+x4 12
+x5 1
+x6 0
+x7 0
+mem 0x00000000 12
+status HALTED
+END STATE

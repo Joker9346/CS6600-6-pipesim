@@ -1,0 +1,11 @@
+BEGIN STATE
+x0 0
+x1 44
+x2 18
+x3 13
+x4 31
+x5 18
+x6 31
+x7 13
+status HALTED
+END STATE
