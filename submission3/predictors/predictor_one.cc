@@ -383,6 +383,114 @@ namespace pipesim
     return bits;
   }
 
+  LoopPredictor::LoopPredictor()
+  {
+    Reset();
+  }
+
+  std::size_t LoopPredictor::Index(uint32_t pc)
+  {
+    return (pc >> 2) & (kEntries - 1);
+  }
+
+  uint32_t LoopPredictor::Tag(uint32_t pc)
+  {
+    return pc >> 6;
+  }
+
+  void LoopPredictor::Reset()
+  {
+    entries_.fill(Entry{});
+    metrics_ = LoopPredictorMetrics{};
+  }
+
+  LoopPrediction LoopPredictor::Predict(uint32_t pc)
+  {
+    ++metrics_.lookups;
+    ++metrics_.table_reads;
+
+    const Entry& entry = entries_[Index(pc)];
+    if (!entry.valid || entry.tag != Tag(pc) || entry.confidence < 2)
+      return {};
+
+    LoopPrediction prediction;
+    prediction.confident = true;
+    const bool continuing = entry.current_iterations < entry.trip_count;
+    prediction.taken = continuing ? entry.continue_taken : !entry.continue_taken;
+    return prediction;
+  }
+
+  void LoopPredictor::Update(const BranchResult& result, bool selected,
+                             bool saved_prediction)
+  {
+    if (result.type != BranchType::kConditional)
+      return;
+
+    if (selected)
+    {
+      ++metrics_.selected;
+      if (saved_prediction == result.taken)
+        ++metrics_.correct;
+    }
+
+    ++metrics_.table_writes;
+    Entry& entry = entries_[Index(result.pc)];
+    const uint32_t tag = Tag(result.pc);
+
+    if (selected && saved_prediction != result.taken && entry.valid && entry.tag == tag)
+      entry.confidence = 0;
+
+    if (!entry.valid || entry.tag != tag)
+    {
+      if (entry.valid)
+        ++metrics_.replacements;
+      entry = Entry{};
+      entry.valid = true;
+      entry.tag = tag;
+      entry.continue_taken = result.taken;
+      entry.current_iterations = 1;
+      return;
+    }
+
+    if (result.taken == entry.continue_taken)
+    {
+      if (entry.current_iterations < kMaxCount)
+        ++entry.current_iterations;
+      return;
+    }
+
+    const uint16_t observed_trip_count = entry.current_iterations;
+    if (entry.confidence == 0)
+    {
+      entry.trip_count = observed_trip_count;
+      entry.confidence = 1;
+    }
+    else if (entry.trip_count == observed_trip_count)
+    {
+      if (entry.confidence < kMaxConfidence)
+        ++entry.confidence;
+    }
+    else
+    {
+      entry.trip_count = observed_trip_count;
+      entry.confidence = 0;
+    }
+    entry.current_iterations = 0;
+  }
+
+  std::uint64_t LoopPredictor::StorageBits() const
+  {
+    return kEntries * (26 + 16 + 16 + 2 + 1 + 1);
+  }
+
+  void StatisticalCorrector::Reset()
+  {
+    for (int i = 0; i < kNumTables; ++i)
+      tables_[i].assign(kTableSizes[i], ScEntry{});
+    lookups_.fill(Lookup{});
+    stats_ = ScStats{};
+  }
+
   uint32_t StatisticalCorrector::FoldHistory(const std::bitset<359>& history,
                                               int length, int width)
   {
